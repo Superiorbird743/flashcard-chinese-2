@@ -37,7 +37,8 @@ class="fixed bottom-4 right-4 bg-gray-300 px-4 py-2 rounded shadow hover:bg-gray
     }
 
     function renderFlashcards(words, mode="learn", sessionIndex=null) {
-      let i=0;
+      let i = 0;
+      const originalLength = words.length;
       function render(){
         if(i>=words.length){
           if(mode==="learn" && sessionIndex!==null){
@@ -47,22 +48,23 @@ class="fixed bottom-4 right-4 bg-gray-300 px-4 py-2 rounded shadow hover:bg-gray
           app.innerHTML=`<div class="text-center"><h2 class="text-xl font-bold">✅ Hoàn thành!</h2></div>`;
           return;
         }
-        const w=words[i];
-        const percent=Math.round(((i+1)/words.length)*100);
+        const w = words[i];
+        const percent = Math.round(((i+1)/originalLength)*100);
         app.innerHTML=`
           <div class="w-full space-y-4">
             <div class="w-full bg-gray-200 h-2 rounded">
-              <div class="bg-blue-500 h-2 rounded" style="width:${percent}%"></div>
+              <div class="bg-blue-500 h-2 rounded" style="width:${Math.min(percent, 100)}%"></div>
             </div>
             <div id="flashcard" class="bg-white rounded-2xl shadow-lg flex flex-col items-center justify-center text-center select-none card mx-auto" style="height:80vh;">
               <div class="text-6xl font-bold">${w.traditional}</div>
               <div class="text-xl mt-3 text-gray-600">${w.pinyin}</div>
               <div class="text-lg mt-1">${w.meaning}</div>
+              <div class="text-sm mt-4 text-gray-500 italic">Vuốt phải để đánh dấu đã thuộc, vuốt trái nếu chưa thuộc</div>
             </div>
-            <p class="text-center text-sm text-gray-500">Thẻ ${i+1}/${words.length} (vuốt trái/phải)</p>
+            <p class="text-center text-sm text-gray-500">Thẻ ${Math.min(i+1, originalLength)}/${originalLength}</p>
           </div>`;
-        const cardEl=document.getElementById("flashcard");
-        addSwipeHandler(cardEl,()=>{
+        const cardEl = document.getElementById("flashcard");
+        addSwipeHandler(cardEl, () => {
           if(mode==="learn" && sessionIndex!==null){
             let buoi=progress[sessionIndex+1]||[];
             if(!buoi.some(x=>x.traditional===w.traditional)){
@@ -72,8 +74,11 @@ class="fixed bottom-4 right-4 bg-gray-300 px-4 py-2 rounded shadow hover:bg-gray
             }
           }
           i++; render();
-        },()=>{
-          words.push(w);
+        }, () => {
+          // Nếu chưa thuộc, đưa thẻ lại vị trí cuối nhưng chỉ nếu chưa từng đưa lại
+          if (!words.slice(i+1).some(x => x.traditional === w.traditional)) {
+            words.push(w);
+          }
           i++; render();
         });
       }
