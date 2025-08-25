@@ -1,0 +1,153 @@
+<!DOCTYPE html><html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flashcard Tiếng Trung</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+  <div id="app" class="w-full max-w-md p-4 text-center">Đang tải dữ liệu...</div><button onclick="renderHome()"
+class="fixed bottom-4 right-4 bg-gray-300 px-4 py-2 rounded shadow hover:bg-gray-400"> Quay lại </button>
+
+  <script>
+    let app = document.getElementById("app");
+    let fullData = [];
+    let sessions = [];
+    let progress = {};
+    let selected = new Set();
+
+    const local = {
+      save: (k, d) => localStorage.setItem(k, JSON.stringify(d)),
+      load: (k) => JSON.parse(localStorage.getItem(k) || "null")
+    };
+
+    function addSwipeHandler(cardEl, onRight, onLeft) {
+      let startX = 0, currentX = 0;
+      cardEl.addEventListener("touchstart", e => startX = e.touches[0].clientX);
+      cardEl.addEventListener("touchmove", e => {
+        currentX = e.touches[0].clientX - startX;
+        cardEl.style.transform = `translateX(${currentX}px) rotate(${currentX/15}deg)`;
+      });
+      cardEl.addEventListener("touchend", () => {
+        if (currentX > 80) setTimeout(onRight,150);
+        else if (currentX < -80) setTimeout(onLeft,150);
+        else cardEl.style.transform="translateX(0) rotate(0)";
+        startX=0; currentX=0;
+      });
+    }
+
+    function renderFlashcards(words, mode="learn", sessionIndex=null) {
+      let i=0;
+      function render(){
+        if(i>=words.length){
+          if(mode==="learn" && sessionIndex!==null){
+            progress[sessionIndex+1]=sessions[sessionIndex];
+            local.save("progress",progress);
+          }
+          app.innerHTML=`<div class="text-center"><h2 class="text-xl font-bold">✅ Hoàn thành!</h2></div>`;
+          return;
+        }
+        const w=words[i];
+        const percent=Math.round(((i+1)/words.length)*100);
+        app.innerHTML=`
+          <div class="w-full space-y-4">
+            <div class="w-full bg-gray-200 h-2 rounded">
+              <div class="bg-blue-500 h-2 rounded" style="width:${percent}%"></div>
+            </div>
+            <div id="flashcard" class="bg-white rounded-2xl shadow-lg flex flex-col items-center justify-center text-center select-none card mx-auto" style="height:80vh;">
+              <div class="text-6xl font-bold">${w.traditional}</div>
+              <div class="text-xl mt-3 text-gray-600">${w.pinyin}</div>
+              <div class="text-lg mt-1">${w.meaning}</div>
+            </div>
+            <p class="text-center text-sm text-gray-500">Thẻ ${i+1}/${words.length} (vuốt trái/phải)</p>
+          </div>`;
+        const cardEl=document.getElementById("flashcard");
+        addSwipeHandler(cardEl,()=>{
+          if(mode==="learn" && sessionIndex!==null){
+            let buoi=progress[sessionIndex+1]||[];
+            if(!buoi.some(x=>x.traditional===w.traditional)){
+              buoi.push(w);
+              progress[sessionIndex+1]=buoi;
+              local.save("progress",progress);
+            }
+          }
+          i++; render();
+        },()=>{
+          words.push(w);
+          i++; render();
+        });
+      }
+      render();
+    }
+
+    function toggle(i){
+      if(selected.has(i)) selected.delete(i); else selected.add(i);
+      renderReviewMenu();
+    }
+
+    function startReview(){
+      let words=[]; selected.forEach(b=>{ words=words.concat(progress[b]||[]); });
+      if(!words.length) return alert("Chưa có từ để ôn tập!");
+      words=words.sort(()=>Math.random()-0.5);
+      renderFlashcards(words,"review");
+    }
+
+    function renderReviewMenu(){
+      app.innerHTML=`
+        <h2 class="text-2xl font-bold text-center mb-4">Chọn buổi ôn tập</h2>
+        <div class="space-y-3">
+          ${sessions.map((s,i)=>{
+            const isSel=selected.has(i+1);
+            return `<button onclick="toggle(${i+1})" class="w-full p-4 rounded-lg shadow ${isSel?'bg-blue-100':'bg-white'}">
+              Buổi ${i+1} (${(progress[i+1]||[]).length}/${s.length} từ)
+            </button>`;
+          }).join("")}
+        </div>
+        <button onclick="startReview()" class="w-full bg-blue-500 text-white px-4 py-2 rounded mt-4">Bắt đầu ôn tập</button>`;
+    }
+
+    function renderLearnMenu() {
+      app.innerHTML = `
+        <h2 class="text-2xl font-bold text-center mb-4">Chọn buổi học</h2>
+        <div class="space-y-3">
+          ${sessions.map((s,i)=>{
+            const done=(progress[i+1]||[]).length===s.length;
+            return `<button onclick="renderFlashcards(sessions[${i}], 'learn', ${i})" class="w-full p-4 rounded-lg shadow ${done?'bg-green-100':'bg-white'}">
+              Buổi ${i+1} - ${(progress[i+1]||[]).length}/${s.length} từ đã thuộc
+            </button>`;
+          }).join("")}
+        </div>`;
+    }
+
+    function renderHome() {
+      app.innerHTML = `
+        <h1 class="text-2xl font-bold text-center mb-6">Flashcard Tiếng Trung</h1>
+        <div class="space-y-4">
+          <button onclick="renderLearnMenu()" class="w-full bg-green-500 text-white px-4 py-3 rounded-lg shadow hover:bg-green-600">
+            Học từ theo buổi
+          </button>
+          <button onclick="renderReviewMenu()" class="w-full bg-blue-500 text-white px-4 py-3 rounded-lg shadow hover:bg-blue-600">
+            Ôn lại bằng flashcard
+          </button>
+        </div>
+      `;
+    }
+
+    fetch("data.json")
+      .then(r=>r.json())
+      .then(data=>{
+        fullData=data.map(item=>{
+          const hanzi=Object.keys(item)[0];
+          return {traditional:hanzi,pinyin:item["ā"]||"",meaning:item["a, à, á"]||""};
+        });
+        const sessionSize=10;
+        for(let i=0;i<Math.ceil(fullData.length/sessionSize);i++){
+          const start=i*sessionSize;
+          const chunk=fullData.slice(start,start+sessionSize);
+          if(chunk.length>0) sessions.push(chunk);
+        }
+        progress=local.load("progress")||{};
+        renderHome();
+      });
+  </script></body>
+</html>
