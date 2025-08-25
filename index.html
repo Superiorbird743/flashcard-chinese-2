@@ -15,7 +15,7 @@
 }
 
 .card.swiping {
-  background-color: #bfdbfe !important; /* blue-200 */
+  background-color: #bfdbfe !important;
 }
 
   </style>
@@ -29,7 +29,6 @@ class="fixed bottom-4 right-4 bg-gray-500 text-white px-4 py-2 rounded shadow ho
     let sessions = [];
     let progress = {};
     let selected = new Set();
-    let seen = new Set(); // NEW
 
     const local = {
       save: (k, d) => localStorage.setItem(k, JSON.stringify(d)),
@@ -55,14 +54,16 @@ class="fixed bottom-4 right-4 bg-gray-500 text-white px-4 py-2 rounded shadow ho
 
     function renderFlashcards(words, mode = "learn", sessionIndex = null) {
       let i = 0;
-      const originalLength = words.length;
+      const uniqueWords = Array.from(new Set(words.map(w => w.traditional)));
+      const total = Math.min(10, uniqueWords.length);
       const completed = new Set();
+
       function render() {
         while (i < words.length && completed.has(words[i].traditional)) i++;
 
-        if (i >= words.length) {
+        if (i >= words.length || completed.size >= total) {
           if (mode === "learn" && sessionIndex !== null) {
-            progress[sessionIndex + 1] = sessions[sessionIndex];
+            progress[sessionIndex + 1] = (progress[sessionIndex + 1] || []).slice(0, 10);
             local.save("progress", progress);
           }
           app.innerHTML = `<div class="text-center"><h2 class="text-xl font-bold text-green-400">✅ Hoàn thành!</h2></div>`;
@@ -70,8 +71,7 @@ class="fixed bottom-4 right-4 bg-gray-500 text-white px-4 py-2 rounded shadow ho
         }
 
         const w = words[i];
-        const learnedCount = completed.size;
-        const percent = Math.round((learnedCount / originalLength) * 100);
+        const percent = Math.round((completed.size / total) * 100);
         const showMeaning = mode === "learn";
         const pinyinLine = `<div class='text-xl mt-3 text-gray-300'>${w.pinyin}</div>`;
         const meaningLine = `<div class='text-lg mt-1'>${w.meaning}</div>`;
@@ -86,7 +86,7 @@ class="fixed bottom-4 right-4 bg-gray-500 text-white px-4 py-2 rounded shadow ho
               ${showMeaning ? `${pinyinLine}${meaningLine}` : `<div id='revealBtn' class='text-gray-300 mt-4 underline'>Chạm để hiện</div>`}
               <div class="text-sm mt-4 text-gray-200 italic">Vuốt phải để đánh dấu đã thuộc, vuốt trái nếu chưa thuộc</div>
             </div>
-            <p class="text-center text-sm text-gray-400">${learnedCount}/${originalLength} từ đã thuộc</p>
+            <p class="text-center text-sm text-gray-400">${completed.size}/${total} từ đã thuộc</p>
           </div>`;
 
         const cardEl = document.getElementById("flashcard");
@@ -102,11 +102,18 @@ class="fixed bottom-4 right-4 bg-gray-500 text-white px-4 py-2 rounded shadow ho
         addSwipeHandler(cardEl, () => {
           if (!completed.has(w.traditional)) {
             completed.add(w.traditional);
+            if (mode === "learn" && sessionIndex !== null) {
+              let buoi = progress[sessionIndex + 1] || [];
+              if (buoi.length < 10 && !buoi.some(x => x.traditional === w.traditional)) {
+                buoi.push(w);
+                progress[sessionIndex + 1] = buoi;
+                local.save("progress", progress);
+              }
+            }
           }
           i++;
           render();
         }, () => {
-          // Vuốt trái: chưa thuộc => đẩy về cuối, không tăng count
           if (!words.slice(i + 1).some(x => x.traditional === w.traditional)) {
             words.push(w);
           }
@@ -137,7 +144,7 @@ class="fixed bottom-4 right-4 bg-gray-500 text-white px-4 py-2 rounded shadow ho
           ${sessions.map((s, i) => {
             const isSel = selected.has(i + 1);
             return `<button onclick="toggle(${i + 1})" class="w-full p-4 rounded-lg shadow ${isSel ? 'bg-blue-800' : 'bg-gray-800'} text-white">
-              Buổi ${i + 1} (${(progress[i + 1] || []).length}/${s.length} từ)
+              Buổi ${i + 1} (${Math.min((progress[i + 1] || []).length, 10)}/${s.length} từ)
             </button>`;
           }).join("")}
         </div>
@@ -151,9 +158,9 @@ class="fixed bottom-4 right-4 bg-gray-500 text-white px-4 py-2 rounded shadow ho
         <h2 class="text-2xl font-bold text-center mb-4">Chọn buổi học</h2>
         <div class="space-y-3">
           ${sessions.map((s, i) => {
-            const done = (progress[i + 1] || []).length === s.length;
+            const done = (progress[i + 1] || []).length >= 10;
             return `<button onclick="renderFlashcards(sessions[${i}], 'learn', ${i})" class="w-full p-4 rounded-lg shadow ${done ? 'bg-green-700' : 'bg-gray-800'} text-white">
-              Buổi ${i + 1} - ${(progress[i + 1] || []).length}/${s.length} từ đã thuộc
+              Buổi ${i + 1} - ${Math.min((progress[i + 1] || []).length, 10)}/10 từ đã thuộc
             </button>`;
           }).join("")}
         </div>`;
